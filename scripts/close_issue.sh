@@ -16,6 +16,15 @@ set -euo pipefail
 ISSUE_ID="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Pick a working Python interpreter (on Windows, python3 may be a Store stub that fails)
+PYTHON=""
+for candidate in python3 python py; do
+    if "$candidate" -c "" &>/dev/null; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+
 # ── Colors ──
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -76,7 +85,7 @@ fi
 # ── Gate 3: Acceptance Criteria ──
 
 echo -n "Gate 3/3 — Acceptance criteria... "
-ISSUE_DATA=$(python3 "$SCRIPT_DIR/linear_client.py" get "$ISSUE_ID" --full 2>/dev/null || echo "")
+ISSUE_DATA=$("$PYTHON" "$SCRIPT_DIR/linear_client.py" get "$ISSUE_ID" --full 2>/dev/null || echo "")
 if [ -z "$ISSUE_DATA" ]; then
     echo -e "${YELLOW}SKIP (could not fetch issue)${NC}"
     GATES_PASSED=$((GATES_PASSED + 1))
@@ -151,8 +160,8 @@ if [ "$GATES_PASSED" -eq "$GATES_TOTAL" ]; then
     CI_RUN_LINK=""
     if command -v gh &>/dev/null && [ -n "$REPO_URL" ]; then
         CI_RUN_JSON=$(gh run list --workflow ci.yml --branch "$BRANCH" --limit 1 --json databaseId,conclusion 2>/dev/null || echo "[]")
-        CI_RUN_ID=$(echo "$CI_RUN_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['databaseId'] if d else '')" 2>/dev/null || echo "")
-        CI_STATUS_TEXT=$(echo "$CI_RUN_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('conclusion','unknown') if d else 'unknown')" 2>/dev/null || echo "unknown")
+        CI_RUN_ID=$(echo "$CI_RUN_JSON" | "$PYTHON" -c "import sys,json; d=json.load(sys.stdin); print(d[0]['databaseId'] if d else '')" 2>/dev/null || echo "")
+        CI_STATUS_TEXT=$(echo "$CI_RUN_JSON" | "$PYTHON" -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('conclusion','unknown') if d else 'unknown')" 2>/dev/null || echo "unknown")
         if [ -n "$CI_RUN_ID" ]; then
             CI_RUN_LINK="[CI Run #${CI_RUN_ID}](${REPO_URL}/actions/runs/${CI_RUN_ID})"
         fi
@@ -163,8 +172,8 @@ if [ "$GATES_PASSED" -eq "$GATES_TOTAL" ]; then
     if command -v gh &>/dev/null; then
         PR_JSON=$(gh pr list --state merged --head "$BRANCH" --json number,title --jq '.[0]' 2>/dev/null || echo "")
         if [ -n "$PR_JSON" ] && [ "$PR_JSON" != "null" ]; then
-            PR_NUM=$(echo "$PR_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || echo "")
-            PR_TITLE=$(echo "$PR_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || echo "")
+            PR_NUM=$(echo "$PR_JSON" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('number',''))" 2>/dev/null || echo "")
+            PR_TITLE=$(echo "$PR_JSON" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || echo "")
             if [ -n "$PR_NUM" ]; then
                 PR_LINK="[PR #${PR_NUM}: ${PR_TITLE}](${REPO_URL}/pull/${PR_NUM})"
             fi
@@ -172,7 +181,7 @@ if [ "$GATES_PASSED" -eq "$GATES_TOTAL" ]; then
     fi
 
     # Acceptance criteria count
-    ISSUE_FULL=$(python3 "$SCRIPT_DIR/linear_client.py" get "$ISSUE_ID" --full 2>/dev/null || echo "")
+    ISSUE_FULL=$("$PYTHON" "$SCRIPT_DIR/linear_client.py" get "$ISSUE_ID" --full 2>/dev/null || echo "")
     AC_CHECKED=$(echo "$ISSUE_FULL" | grep -ci '\- \[x\]' || true)
     AC_TOTAL=$((AC_CHECKED + $(echo "$ISSUE_FULL" | grep -c '\- \[ \]' || true)))
 
@@ -226,10 +235,10 @@ ${FILES_CHANGED}
 ---
 *Evidencia generada automáticamente por el harness.*"
 
-    python3 "$SCRIPT_DIR/linear_client.py" comment "$ISSUE_ID" "$EVIDENCE" 2>/dev/null || true
+    "$PYTHON" "$SCRIPT_DIR/linear_client.py" comment "$ISSUE_ID" "$EVIDENCE" 2>/dev/null || true
 
     # Move to Done
-    python3 "$SCRIPT_DIR/linear_client.py" move "$ISSUE_ID" "Done" 2>/dev/null || true
+    "$PYTHON" "$SCRIPT_DIR/linear_client.py" move "$ISSUE_ID" "Done" 2>/dev/null || true
 
     echo "Evidence posted and issue moved to Done."
     exit 0

@@ -132,6 +132,78 @@ test("Column counters update on add/move/delete", function () {
   dom.window.close();
 });
 
+// ── Theme toggle (TY-7) ──
+
+function boardWith(setup) {
+  const dom = new JSDOM(html, { runScripts: "dangerously", url: "http://localhost" });
+  dom.window.localStorage.clear();
+  if (setup) setup(dom.window);
+  dom.window.eval(js);
+  return dom;
+}
+
+test("Theme defaults to dark with no stored preference", function () {
+  var dom = boardWith();
+  var doc = dom.window.document;
+  assert(!doc.documentElement.hasAttribute("data-theme"), "Dark theme should not set data-theme");
+  var btn = doc.getElementById("theme-toggle-btn");
+  assert(btn.textContent === "Light", "Button should offer 'Light', got " + btn.textContent);
+  assert(btn.getAttribute("aria-pressed") === "true", "aria-pressed should be true in dark mode");
+  dom.window.close();
+});
+
+test("Clicking the toggle switches dark -> light -> dark", function () {
+  var dom = boardWith();
+  var doc = dom.window.document;
+  var btn = doc.getElementById("theme-toggle-btn");
+
+  btn.click();
+  assert(doc.documentElement.getAttribute("data-theme") === "light", "Should be light after first click");
+  assert(btn.textContent === "Dark", "Button should offer 'Dark', got " + btn.textContent);
+  assert(btn.getAttribute("aria-pressed") === "false", "aria-pressed should be false in light mode");
+
+  btn.click();
+  assert(!doc.documentElement.hasAttribute("data-theme"), "Should be back to dark after second click");
+  assert(btn.getAttribute("aria-pressed") === "true", "aria-pressed should be true again");
+  dom.window.close();
+});
+
+test("Theme choice persists in localStorage and is restored on load", function () {
+  var dom = boardWith();
+  dom.window.document.getElementById("theme-toggle-btn").click();
+  assert(dom.window.localStorage.getItem("hdd-theme") === "light", "Light theme not persisted");
+  dom.window.close();
+
+  var reloaded = boardWith(function (w) { w.localStorage.setItem("hdd-theme", "light"); });
+  assert(
+    reloaded.window.document.documentElement.getAttribute("data-theme") === "light",
+    "Stored light theme not applied on load"
+  );
+  reloaded.window.close();
+});
+
+test("First visit follows prefers-color-scheme: light", function () {
+  var dom = boardWith(function (w) {
+    w.matchMedia = function (q) { return { matches: q.indexOf("light") !== -1 }; };
+  });
+  assert(dom.window.TaskBoard.getTheme() === "light", "Should follow OS light preference");
+  assert(dom.window.document.documentElement.getAttribute("data-theme") === "light", "Light not applied");
+  dom.window.close();
+});
+
+test("Stored preference wins over OS preference; invalid values are ignored", function () {
+  var dom = boardWith(function (w) {
+    w.matchMedia = function (q) { return { matches: q.indexOf("light") !== -1 }; };
+    w.localStorage.setItem("hdd-theme", "dark");
+  });
+  assert(dom.window.TaskBoard.getTheme() === "dark", "Stored dark should beat OS light");
+  dom.window.close();
+
+  var bad = boardWith(function (w) { w.localStorage.setItem("hdd-theme", "purple"); });
+  assert(bad.window.TaskBoard.getTheme() === "dark", "Invalid stored value should fall back to dark");
+  bad.window.close();
+});
+
 // ── Results ──
 
 console.log("\n" + "=".repeat(40));

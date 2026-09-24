@@ -208,7 +208,14 @@
   // ── Theme Toggle ──
 
   function loadTheme() {
-    return localStorage.getItem("hdd-theme") || "dark";
+    var stored = localStorage.getItem("hdd-theme");
+    if (stored === "light" || stored === "dark") return stored;
+    // First visit: follow the OS preference (matchMedia may be missing, e.g. jsdom)
+    if (typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
   }
 
   function applyTheme(theme) {
@@ -220,6 +227,7 @@
     var btn = document.getElementById("theme-toggle-btn");
     if (btn) {
       btn.textContent = theme === "dark" ? "Light" : "Dark";
+      btn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
     }
     localStorage.setItem("hdd-theme", theme);
   }
@@ -240,6 +248,8 @@
       moveTask: moveTask,
       deleteTask: deleteTask,
       getTasks: function () { return tasks.slice(); },
+      getTheme: loadTheme,
+      toggleTheme: toggleTheme,
       reset: function () {
         tasks = [];
         saveTasks(tasks);
